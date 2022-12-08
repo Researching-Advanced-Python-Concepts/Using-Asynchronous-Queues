@@ -12,6 +12,13 @@ import aiohttp
 class Job(NamedTuple):
     url: str
     depth: int = 1  # default 1
+    
+    def __lt__(self, other):
+        # this is needed for priority queue
+        # we must be able to compare
+        if isinstance(other, Job):
+            # shorted url will take priority in min-heap
+            return len(self.url) < len(other.url)
 
 
 async def worker(worker_id, session, queue, links, max_depth):
@@ -64,7 +71,11 @@ async def main(args):
         # in descending order (later)
         links = Counter()
         # instantiate an asynchronous FIFO Queue
-        queue = asyncio.Queue()  # fifo
+        # queue = asyncio.Queue()  # fifo
+        print(args.queue)
+        print(QUEUES[args.queue])
+        # sys.exit(0)
+        queue = QUEUES[args.queue]()
         
         # create a no. of worker coroutines wrapped in
         # async tasks that start running as soon as possible 
@@ -94,7 +105,7 @@ async def main(args):
         for task in tasks:
             task.cancel()
 
-        await asyncio.gather(*task, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
         display(links)
     finally:
@@ -104,10 +115,17 @@ async def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("url")
+    parser.add_argument("-q", "--queue", type=str, default="fifo")
     parser.add_argument("-d", "--max-depth", type=int, default=2)
     parser.add_argument("-w", "--num-workers", type=int, default=3)
     return parser.parse_args()
 
+
+QUEUES = {
+    "fifo": asyncio.Queue,
+    "lifo": asyncio.LifoQueue,
+    "heap": asyncio.PriorityQueue
+}
 
 def display(links):
     # most common gives list of tuples
