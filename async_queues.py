@@ -14,7 +14,7 @@ class Job(NamedTuple):
     depth: int = 1  # default 1
 
 
-async def worker(worker_id, session ,queue, links, max_depth):
+async def worker(worker_id, session, queue, links, max_depth):
     print(f"[{worker_id} starting]", file=sys.stderr)
     while True:
         # wait for a job to arrive in the queue
@@ -55,6 +55,7 @@ def parse_links(url, html):
             # to form an absolute interpretation of the latter.
             yield urljoin(url, href)
 
+
 async def main(args):
     session = aiohttp.ClientSession()
     try:
@@ -62,6 +63,39 @@ async def main(args):
         # we'll see the list of links sorted by the no. of visits
         # in descending order (later)
         links = Counter()
+        # instantiate an asynchronous FIFO Queue
+        queue = asyncio.Queue()  # fifo
+        
+        # create a no. of worker coroutines wrapped in
+        # async tasks that start running as soon as possible 
+        # in the background on the event loop
+        tasks = [
+            asyncio.create_task(
+                worker(
+                    f"Worker-{i + 1}",
+                    session,
+                    queue,
+                    links,
+                    args.max_depth,
+                )
+            )
+            for i in range(args.num_workers)
+        ]
+
+        # puts the 1st job in the queue, which kicks off the crawling
+        await queue.put(Job(args.url))
+        
+        # causes the main coroutine to wait until the queue has been
+        # drained and there are no more jobs to perform
+        await queue.join()
+
+        # graceful cleanup when the background tasks are no longer
+        # needed
+        for task in tasks:
+            task.cancel()
+
+        await asyncio.gather(*task, return_exceptions=True)
+
         display(links)
     finally:
         await session.close()
