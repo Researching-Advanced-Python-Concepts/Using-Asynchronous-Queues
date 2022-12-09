@@ -17,6 +17,7 @@
 ## LIFO
 
 - Crawler visits identical links but in a different order
+- the last coming link is evaluated first while the previous caught links wait for the new ones to finish
 - we visit deeper links too
 - visit depth 2 and visit its subsequent depth down the line
   - like `videos` depth 2 -> `videos/bin` depth 3
